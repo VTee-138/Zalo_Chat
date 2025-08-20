@@ -2,14 +2,22 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Chọn Kênh Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Zalo OA Chat</title>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
     <div class="dashboard-page">
-        <h1>Kênh Chat</h1>
+        <div class="dashboard-header">
+            <h1>🎯 Dashboard - Zalo OA Chat</h1>
+            <p>Chọn một Official Account để bắt đầu chat với khách hàng</p>
+        </div>
         <div id="channel-list" class="channel-list">
-            </div>
+            <div class="loading">Đang tải danh sách OA...</div>
+        </div>
+        <div class="dashboard-footer">
+            <a href="/connect/zalo" class="connect-new-button">+ Kết nối OA mới</a>
+        </div>
     </div>
     <script src="/dashboard.js"></script>
 </body>
