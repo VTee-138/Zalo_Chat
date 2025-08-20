@@ -20,6 +20,8 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+const { ZALO_APP_ID, ZALO_APP_SECRET, ZALO_REDIRECT_URI_DEV, ZALO_REDIRECT_URI_PROD, PORT = 3000, NODE_ENV = 'development' } = process.env;
+
 // Middleware security và CORS
 if (NODE_ENV === 'production') {
     app.set('trust proxy', 1); // Trust first proxy for HTTPS
@@ -34,7 +36,11 @@ if (NODE_ENV === 'production') {
 app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const { ZALO_APP_ID, ZALO_APP_SECRET, ZALO_REDIRECT_URI, PORT = 3000, NODE_ENV = 'development' } = process.env;
+// Chọn redirect URI phù hợp với environment
+const ZALO_REDIRECT_URI = NODE_ENV === 'production' ? ZALO_REDIRECT_URI_PROD : ZALO_REDIRECT_URI_DEV;
+
+console.log(`🌍 Environment: ${NODE_ENV}`);
+console.log(`🔗 Using redirect URI: ${ZALO_REDIRECT_URI}`);
 
 if (!ZALO_APP_ID || !ZALO_APP_SECRET || !ZALO_REDIRECT_URI) {
   console.error("Vui lòng cung cấp đủ các biến môi trường trong file .env");
@@ -86,7 +92,90 @@ app.get("/connect/zalo", (req, res) => {
   console.log("-----------------");
   res.redirect(u.toString());
 });
+app.get("/connect/zalo-user", (req, res) => {
+    const state = crypto.randomBytes(16).toString("hex");
+    
+    // Sử dụng dynamic redirect URI dựa trên environment
+    const personalRedirectUri = NODE_ENV === 'production' 
+        ? 'https://chatbot.aipencil.name.vn/oauth/zalo/user/callback'
+        : 'http://localhost:3000/oauth/zalo/user/callback';
 
+    const u = new URL("https://oauth.zaloapp.com/v4/permission");
+    u.searchParams.set("app_id", ZALO_APP_ID);
+    u.searchParams.set("redirect_uri", personalRedirectUri);
+    u.searchParams.set("state", state);
+    u.searchParams.set("scope", "profile"); // Yêu cầu quyền xem thông tin cơ bản
+
+    console.log("--- DEBUG PERSONAL URL ---");
+    console.log("Personal URL đang được sử dụng:", u.toString());
+    console.log("Redirect URI:", personalRedirectUri);
+    console.log("-------------------------");
+
+    res.redirect(u.toString());
+});
+
+app.get("/oauth/zalo/user/callback", async (req, res) => {
+    const { code } = req.query;
+    if (!code) { return res.status(400).send("Không tìm thấy mã `code`."); }
+    
+    // Sử dụng correct redirect URI dựa trên environment
+    const personalRedirectUri = NODE_ENV === 'production' 
+        ? 'https://chatbot.aipencil.name.vn/oauth/zalo/user/callback'
+        : 'http://localhost:3000/oauth/zalo/user/callback';
+
+    try {
+        // Lấy access token với correct redirect URI
+        const tokenResponse = await axios.post('https://oauth.zaloapp.com/v4/access_token', 
+            new URLSearchParams({ 
+                code, 
+                app_id: ZALO_APP_ID, 
+                grant_type: 'authorization_code',
+                redirect_uri: personalRedirectUri
+            }), 
+            { headers: { 'secret_key': ZALO_APP_SECRET } }
+        );
+        const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+        // Lấy thông tin người dùng
+        const profileResponse = await axios.get('https://graph.zalo.me/v2.0/me', { params: { fields: 'id,name,picture' }, headers: { 'access_token': access_token } });
+        const { id: zalo_user_id, name: display_name, picture } = profileResponse.data;
+        const avatar = picture.data.url;
+
+        // ===== PHẦN MỚI: LƯU VÀO DATABASE =====
+        const expiresAt = new Date(Date.now() + (expires_in - 300) * 1000);
+
+        // 1. Lưu hoặc cập nhật thông tin người dùng
+        await db.query(`
+            INSERT INTO zalo_personal_users (zalo_user_id, display_name, avatar) VALUES ($1, $2, $3)
+            ON CONFLICT (zalo_user_id) DO UPDATE SET display_name = EXCLUDED.display_name, avatar = EXCLUDED.avatar;
+        `, [zalo_user_id, display_name, avatar]);
+
+        // 2. Lưu hoặc cập nhật token của người dùng
+        await db.query(`
+            INSERT INTO zalo_personal_tokens (zalo_user_id, access_token, refresh_token, expires_at, scopes) VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (zalo_user_id) DO UPDATE SET access_token = EXCLUDED.access_token, refresh_token = EXCLUDED.refresh_token, expires_at = EXCLUDED.expires_at, scopes = EXCLUDED.scopes;
+        `, [zalo_user_id, access_token, refresh_token, expiresAt, ['profile']]);
+        
+        console.log(`✅ Đã lưu thông tin và token cho người dùng: ${display_name}`);
+        // =======================================
+
+        // Lưu thông tin personal user vào session
+        if (!req.session.connectedAccounts) {
+            req.session.connectedAccounts = { oas: {}, personal: {} };
+        }
+        req.session.connectedAccounts.personal[zalo_user_id] = { 
+            name: display_name, 
+            avatar: avatar,
+            type: 'personal'
+        };
+
+        res.redirect('/dashboard');
+
+    } catch (error) {
+        console.error("Lỗi khi xử lý callback tài khoản cá nhân:", error.response?.data || error.message);
+        res.status(500).send("Có lỗi xảy ra trong quá trình đăng nhập.");
+    }
+});
 // 2. Route xử lý callback từ Zalo (ĐÃ NÂNG CẤP PKCE)
 app.get("/oauth/zalo/callback", async (req, res) => {
   const { code, state, oa_id } = req.query;
@@ -133,11 +222,15 @@ app.get("/oauth/zalo/callback", async (req, res) => {
     await db.query(upsertTokenQuery, [oa_id, access_token, refresh_token, expiresAt]);
     console.log(`✅ Lưu thông tin thành công cho OA ID: ${oa_id}`);
 
-    // Lưu thông tin OA vào session
-    if (!req.session.connectedOAs) {
-        req.session.connectedOAs = {};
+    // Lưu thông tin OA vào session với structure mới
+    if (!req.session.connectedAccounts) {
+        req.session.connectedAccounts = { oas: {}, personal: {} };
     }
-    req.session.connectedOAs[oa_id] = { name: `Official Account ${oa_id}`, avatar: '...' };
+    req.session.connectedAccounts.oas[oa_id] = { 
+        name: `Official Account ${oa_id}`, 
+        avatar: 'https://developers.zalo.me/web/static/prod/images/zalo-logo.svg',
+        type: 'oa'
+    };
     
     res.redirect('/dashboard');
   
@@ -289,9 +382,21 @@ app.get('/dashboard', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-// API để lấy danh sách OA đã kết nối từ session
+// API để lấy danh sách tất cả tài khoản đã kết nối từ session
+app.get('/api/get-connected-accounts', (req, res) => {
+    if (req.session.connectedAccounts) {
+        res.json(req.session.connectedAccounts);
+    } else {
+        res.json({ oas: {}, personal: {} });
+    }
+});
+
+// API cũ để backward compatibility
 app.get('/api/get-connected-oas', (req, res) => {
-    if (req.session.connectedOAs) {
+    if (req.session.connectedAccounts && req.session.connectedAccounts.oas) {
+        res.json(req.session.connectedAccounts.oas);
+    } else if (req.session.connectedOAs) {
+        // Fallback cho old session structure
         res.json(req.session.connectedOAs);
     } else {
         res.json({});
@@ -363,6 +468,12 @@ app.get('/chat/:oaId', (req, res) => {
     // TODO: Kiểm tra xem người dùng có quyền truy cập oaId này không
     res.sendFile(path.join(__dirname, 'public', 'chat.html'));
 });
+
+app.get('/profile/:userId', (req, res) => {
+    // TODO: Tạo trang profile riêng hoặc redirect về dashboard
+    res.redirect('/dashboard');
+});
+
 // Khởi động server
 const HOST = NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1';
 server.listen(PORT, HOST, () => {

@@ -19,16 +19,57 @@
             </header>
             
             <main>
-                <a href="/connect/zalo" class="connect-button">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
-                    Kết nối với Zalo OA
-                </a>
+                <div class="connection-wizard">
+                    <div class="wizard-step">
+                        <h3>🎯 Chọn loại tài khoản để kết nối</h3>
+                        <div class="account-type-selector">
+                            <div class="account-option" data-type="oa" onclick="selectAccountType('oa')">
+                                <div class="option-icon">🏢</div>
+                                <div class="option-content">
+                                    <h4>Zalo Official Account</h4>
+                                    <p>Dành cho doanh nghiệp, có thể nhận/gửi tin nhắn với khách hàng</p>
+                                    <div class="option-features">
+                                        <span class="feature">✅ Chat với khách hàng</span>
+                                        <span class="feature">✅ Webhook tự động</span>
+                                        <span class="feature">✅ Quản lý tin nhắn</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="account-option" data-type="personal" onclick="selectAccountType('personal')">
+                                <div class="option-icon">👤</div>
+                                <div class="option-content">
+                                    <h4>Zalo Cá Nhân</h4>
+                                    <p>Tài khoản cá nhân, xem thông tin profile và quản lý</p>
+                                    <div class="option-features">
+                                        <span class="feature">✅ Xem profile</span>
+                                        <span class="feature">✅ Thông tin bạn bè</span>
+                                        <span class="feature">✅ Quản lý tài khoản</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="wizard-action">
+                        <button id="connect-button" class="connect-button disabled" onclick="connectAccount()" disabled>
+                            <div class="button-content">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                </svg>
+                                <span id="connect-text">Chọn loại tài khoản để tiếp tục</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
                 
-                <div style="margin-top: 30px;">
-                    <a href="/dashboard" style="color: #0068FF; text-decoration: none; font-size: 14px;">
-                        Đã kết nối? Vào Dashboard →
+                <div class="quick-access">
+                    <p>Đã có tài khoản kết nối?</p>
+                    <a href="/dashboard" class="dashboard-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                        </svg>
+                        Vào Dashboard
                     </a>
                 </div>
             </main>
@@ -38,5 +79,74 @@
             </footer>
         </div>
     </div>
+    
+    <script>
+        let selectedAccountType = null;
+        
+        function selectAccountType(type) {
+            selectedAccountType = type;
+            
+            // Remove previous selection
+            document.querySelectorAll('.account-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            // Add selection to clicked option
+            document.querySelector(`[data-type="${type}"]`).classList.add('selected');
+            
+            // Update button
+            const connectButton = document.getElementById('connect-button');
+            const connectText = document.getElementById('connect-text');
+            
+            connectButton.classList.remove('disabled');
+            connectButton.disabled = false;
+            
+            if (type === 'oa') {
+                connectText.textContent = 'Kết nối với Zalo Official Account';
+                connectButton.classList.add('oa-type');
+                connectButton.classList.remove('personal-type');
+            } else {
+                connectText.textContent = 'Kết nối với Zalo Cá Nhân';
+                connectButton.classList.add('personal-type');
+                connectButton.classList.remove('oa-type');
+            }
+        }
+        
+        function connectAccount() {
+            if (!selectedAccountType) return;
+            
+            // Show loading state
+            const connectButton = document.getElementById('connect-button');
+            const connectText = document.getElementById('connect-text');
+            const originalText = connectText.textContent;
+            
+            connectButton.classList.add('loading');
+            connectText.textContent = 'Đang chuyển hướng...';
+            connectButton.disabled = true;
+            
+            // Redirect after short delay for UX
+            setTimeout(() => {
+                if (selectedAccountType === 'oa') {
+                    window.location.href = '/connect/zalo';
+                } else {
+                    window.location.href = '/connect/zalo-user';
+                }
+            }, 800);
+        }
+        
+        // Add some interactive effects
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add hover effects
+            document.querySelectorAll('.account-option').forEach(option => {
+                option.addEventListener('mouseenter', () => {
+                    option.style.transform = 'translateY(-2px)';
+                });
+                
+                option.addEventListener('mouseleave', () => {
+                    option.style.transform = 'translateY(0)';
+                });
+            });
+        });
+    </script>
 </body>
 </html>
