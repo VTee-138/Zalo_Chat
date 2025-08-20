@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zalo Personal Account - Profile</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="profile-container">
+        <div class="profile-header">
+            <div class="back-button">
+                <a href="/dashboard" class="back-link">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20v-2z"/>
+                    </svg>
+                    Về Dashboard
+                </a>
+            </div>
+            <h1>👤 Tài Khoản Cá Nhân</h1>
+        </div>
+
+        <div class="profile-content">
+            <div class="profile-card" id="profile-card">
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>Đang tải thông tin...</p>
+                </div>
+            </div>
+
+            <div class="profile-actions">
+                <div class="action-grid">
+                    <div class="action-card">
+                        <div class="action-icon">👥</div>
+                        <h3>Danh Sách Bạn Bè</h3>
+                        <p>Xem danh sách bạn bè Zalo</p>
+                        <button class="action-btn" onclick="viewFriends()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63A1.5 1.5 0 0 0 18.54 8H17c-.8 0-1.54.37-2.01 1l-2.99 4V22h2v-6h2v6h4z"/>
+                            </svg>
+                            Xem Danh Sách
+                        </button>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="action-icon">📱</div>
+                        <h3>Thông Tin Chi Tiết</h3>
+                        <p>Xem thông tin profile đầy đủ</p>
+                        <button class="action-btn" onclick="viewDetailedProfile()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                            </svg>
+                            Xem Chi Tiết
+                        </button>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="action-icon">🔄</div>
+                        <h3>Đồng Bộ Dữ Liệu</h3>
+                        <p>Cập nhật thông tin mới nhất</p>
+                        <button class="action-btn" onclick="syncData()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                            </svg>
+                            Đồng Bộ
+                        </button>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="action-icon">⚙️</div>
+                        <h3>Cài Đặt</h3>
+                        <p>Quản lý cài đặt tài khoản</p>
+                        <button class="action-btn" onclick="openSettings()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+                            </svg>
+                            Cài Đặt
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="profile-footer">
+            <p>💡 Đây là tài khoản Zalo cá nhân của bạn. Bạn có thể xem thông tin profile, danh sách bạn bè và quản lý cài đặt.</p>
+        </div>
+    </div>
+
+    <script src="/profile.js"></script>
+</body>
+</html>

@@ -129,7 +129,8 @@
                 if (selectedAccountType === 'oa') {
                     window.location.href = '/connect/zalo';
                 } else {
-                    window.location.href = '/connect/zalo-user';
+                    // Thay đổi: Chuyển đến trang QR thay vì OAuth trực tiếp
+                    window.location.href = '/qr-personal.html';
                 }
             }, 800);
         }

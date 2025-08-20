@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quét mã QR - Kết nối Zalo Cá Nhân</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="qr-container">
+            <header class="qr-header">
+                <a href="/" class="back-link">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                    </svg>
+                    Quay lại
+                </a>
+                <h1>🔗 Kết nối Zalo Cá Nhân</h1>
+                <p>Quét mã QR bằng ứng dụng Zalo trên điện thoại của bạn</p>
+            </header>
+
+            <div class="qr-content">
+                <div class="qr-steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-text">
+                            <h3>Mở ứng dụng Zalo</h3>
+                            <p>Mở app Zalo trên điện thoại của bạn</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-text">
+                            <h3>Vào menu quét QR</h3>
+                            <p>Chọn biểu tượng quét QR trong ứng dụng</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-text">
+                            <h3>Quét mã QR</h3>
+                            <p>Quét mã QR bên dưới để kết nối tài khoản</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="qr-code-section">
+                    <div class="qr-wrapper">
+                        <div id="qr-loading" class="qr-loading">
+                            <div class="spinner"></div>
+                            <p>Đang tạo mã QR...</p>
+                        </div>
+                        <div id="qr-code" class="qr-code"></div>
+                        <div id="qr-error" class="qr-error" style="display: none;">
+                            <div class="error-icon">❌</div>
+                            <h3>Không thể tạo mã QR</h3>
+                            <p>Vui lòng thử lại sau ít phút</p>
+                            <button onclick="generateQR()" class="retry-btn">Thử lại</button>
+                        </div>
+                    </div>
+                    
+                    <div class="qr-info">
+                        <div class="info-card">
+                            <div class="info-icon">🔒</div>
+                            <div class="info-content">
+                                <h4>An toàn & Bảo mật</h4>
+                                <p>Mã QR này chỉ có hiệu lực trong 5 phút và chỉ dùng để xác thực tài khoản của bạn</p>
+                            </div>
+                        </div>
+                        
+                        <div class="info-card">
+                            <div class="info-icon">⏱️</div>
+                            <div class="info-content">
+                                <h4>Thời gian còn lại</h4>
+                                <p id="countdown">05:00</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="qr-status" id="qr-status">
+                    <div class="status-waiting">
+                        <div class="pulse-dot"></div>
+                        <p>Đang chờ bạn quét mã QR...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="qr-footer">
+                <div class="help-section">
+                    <h4>❓ Cần trợ giúp?</h4>
+                    <div class="help-links">
+                        <button onclick="refreshQR()" class="help-btn">🔄 Tạo mã QR mới</button>
+                        <a href="/" class="help-btn">🏠 Về trang chủ</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let countdownTimer;
+        let qrExpireTime;
+        let authState;
+        let pollInterval;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            generateQR();
+        });
+
+        async function generateQR() {
+            try {
+                // Reset UI
+                document.getElementById('qr-loading').style.display = 'block';
+                document.getElementById('qr-code').style.display = 'none';
+                document.getElementById('qr-error').style.display = 'none';
+                
+                // Clear any existing timers
+                if (countdownTimer) clearInterval(countdownTimer);
+                if (pollInterval) clearInterval(pollInterval);
+
+                // Generate state for security
+                authState = Math.random().toString(36).substring(2, 15);
+                
+                // Get QR data from server
+                const response = await fetch('/api/generate-personal-qr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ state: authState })
+                });
+
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.message || 'Không thể tạo mã QR');
+                }
+
+                // Generate QR code
+                const qrElement = document.getElementById('qr-code');
+                qrElement.innerHTML = '';
+                
+                await QRCode.toCanvas(qrElement, data.qrData, {
+                    width: 280,
+                    height: 280,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    margin: 2,
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+
+                // Update UI
+                document.getElementById('qr-loading').style.display = 'none';
+                document.getElementById('qr-code').style.display = 'block';
+
+                // Set expiration time (5 minutes)
+                qrExpireTime = Date.now() + (5 * 60 * 1000);
+                startCountdown();
+                
+                // Start polling for authentication status
+                startPolling();
+
+            } catch (error) {
+                console.error('Lỗi khi tạo QR:', error);
+                document.getElementById('qr-loading').style.display = 'none';
+                document.getElementById('qr-error').style.display = 'block';
+            }
+        }
+
+        function startCountdown() {
+            countdownTimer = setInterval(() => {
+                const remaining = qrExpireTime - Date.now();
+                
+                if (remaining <= 0) {
+                    clearInterval(countdownTimer);
+                    document.getElementById('countdown').textContent = '00:00';
+                    // Auto refresh QR when expired
+                    setTimeout(() => {
+                        generateQR();
+                    }, 1000);
+                    return;
+                }
+
+                const minutes = Math.floor(remaining / 60000);
+                const seconds = Math.floor((remaining % 60000) / 1000);
+                document.getElementById('countdown').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        function startPolling() {
+            pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/check-personal-auth-status?state=${authState}`);
+                    const data = await response.json();
+                    
+                    if (data.authenticated) {
+                        // Clear timers
+                        if (countdownTimer) clearInterval(countdownTimer);
+                        if (pollInterval) clearInterval(pollInterval);
+                        
+                        // Show success status
+                        document.getElementById('qr-status').innerHTML = `
+                            <div class="status-success">
+                                <div class="success-icon">✅</div>
+                                <p>Xác thực thành công! Đang hoàn tất đăng nhập...</p>
+                            </div>
+                        `;
+                        
+                        // Complete login process
+                        await completeLogin(authState);
+                    }
+                } catch (error) {
+                    console.error('Lỗi khi kiểm tra trạng thái:', error);
+                }
+            }, 2000); // Check every 2 seconds
+        }
+
+        async function completeLogin(state) {
+            try {
+                const response = await fetch('/api/complete-qr-login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ state })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Redirect to dashboard
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1500);
+                } else {
+                    throw new Error(result.message || 'Login completion failed');
+                }
+            } catch (error) {
+                console.error('Lỗi khi hoàn tất đăng nhập:', error);
+                document.getElementById('qr-status').innerHTML = `
+                    <div class="status-error">
+                        <div class="error-icon">❌</div>
+                        <p>Có lỗi xảy ra khi hoàn tất đăng nhập</p>
+                    </div>
+                `;
+            }
+        }
+
+        function refreshQR() {
+            generateQR();
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (countdownTimer) clearInterval(countdownTimer);
+            if (pollInterval) clearInterval(pollInterval);
+        });
+    </script>
+</body>
+</html>

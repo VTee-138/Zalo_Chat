@@ -15,6 +15,8 @@ const server = http.createServer(app); // <-- Tạo một http server từ app e
 const io = new Server(server); // <-- Khởi tạo socket.io server
 
 const pkceStore = new Map();
+// QR Authentication store - lưu trữ trạng thái xác thực QR
+const qrAuthStore = new Map();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -92,6 +94,7 @@ app.get("/connect/zalo", (req, res) => {
   console.log("-----------------");
   res.redirect(u.toString());
 });
+
 app.get("/connect/zalo-user", (req, res) => {
     const state = crypto.randomBytes(16).toString("hex");
     
@@ -470,8 +473,269 @@ app.get('/chat/:oaId', (req, res) => {
 });
 
 app.get('/profile/:userId', (req, res) => {
-    // TODO: Tạo trang profile riêng hoặc redirect về dashboard
-    res.redirect('/dashboard');
+    // Serve profile page for personal accounts
+    res.sendFile(path.join(__dirname, 'public', 'profile.html'));
+});
+
+// API để lấy thông tin chi tiết personal profile
+app.get('/api/personal-profile/:userId', async (req, res) => {
+    const { userId } = req.params;
+    
+    try {
+        // Kiểm tra xem user có trong session không
+        if (!req.session.connectedAccounts?.personal?.[userId]) {
+            return res.status(404).json({ error: 'Personal account not found in session' });
+        }
+
+        const personalAccount = req.session.connectedAccounts.personal[userId];
+        
+        // Lấy thông tin từ database nếu có
+        const dbResult = await db.query(
+            'SELECT * FROM zalo_personal_users WHERE zalo_user_id = $1',
+            [userId]
+        );
+
+        if (dbResult.rows.length > 0) {
+            const dbData = dbResult.rows[0];
+            res.json({
+                ...personalAccount,
+                database_info: dbData,
+                last_updated: dbData.updated_at,
+                connection_time: dbData.created_at
+            });
+        } else {
+            res.json({
+                ...personalAccount,
+                source: 'session_only'
+            });
+        }
+
+    } catch (error) {
+        console.error('Lỗi khi lấy personal profile:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// API tạo QR code cho personal account
+app.post('/api/generate-personal-qr', async (req, res) => {
+    try {
+        const { state } = req.body;
+        
+        if (!state) {
+            return res.status(400).json({ success: false, message: 'State is required' });
+        }
+
+        // Sử dụng dynamic redirect URI dựa trên environment  
+        const personalRedirectUri = NODE_ENV === 'production' 
+            ? 'https://chatbot.aipencil.name.vn/oauth/zalo/user/qr-callback'
+            : 'http://localhost:3000/oauth/zalo/user/qr-callback';
+
+        // Tạo OAuth URL với state
+        const authUrl = new URL("https://oauth.zaloapp.com/v4/permission");
+        authUrl.searchParams.set("app_id", process.env.ZALO_APP_ID || "4316046001988065095");
+        authUrl.searchParams.set("redirect_uri", personalRedirectUri);
+        authUrl.searchParams.set("state", state);
+        authUrl.searchParams.set("scope", "profile");
+
+        // Lưu trạng thái vào QR store với thời gian hết hạn (5 phút)
+        qrAuthStore.set(state, {
+            created: Date.now(),
+            expires: Date.now() + (5 * 60 * 1000), // 5 minutes
+            authenticated: false,
+            userInfo: null
+        });
+
+        // Cleanup expired entries
+        for (const [key, value] of qrAuthStore.entries()) {
+            if (value.expires < Date.now()) {
+                qrAuthStore.delete(key);
+            }
+        }
+
+        res.json({
+            success: true,
+            qrData: authUrl.toString(),
+            expires: Date.now() + (5 * 60 * 1000)
+        });
+
+    } catch (error) {
+        console.error('Lỗi khi tạo QR:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// API kiểm tra trạng thái xác thực QR
+app.get('/api/check-personal-auth-status', (req, res) => {
+    const { state } = req.query;
+    
+    if (!state) {
+        return res.status(400).json({ error: 'State is required' });
+    }
+
+    const authData = qrAuthStore.get(state);
+    
+    if (!authData) {
+        return res.json({ authenticated: false, expired: true });
+    }
+
+    if (authData.expires < Date.now()) {
+        qrAuthStore.delete(state);
+        return res.json({ authenticated: false, expired: true });
+    }
+
+    res.json({
+        authenticated: authData.authenticated,
+        expired: false,
+        userInfo: authData.userInfo
+    });
+});
+
+// Callback mới cho QR authentication
+app.get("/oauth/zalo/user/qr-callback", async (req, res) => {
+    const { code, state } = req.query;
+    
+    if (!code || !state) { 
+        return res.status(400).send("Missing code or state parameter"); 
+    }
+
+    // Kiểm tra state có tồn tại trong QR store không
+    const authData = qrAuthStore.get(state);
+    if (!authData) {
+        return res.status(400).send("Invalid or expired QR session");
+    }
+
+    if (authData.expires < Date.now()) {
+        qrAuthStore.delete(state);
+        return res.status(400).send("QR code has expired");
+    }
+
+    // Sử dụng correct redirect URI dựa trên environment
+    const personalRedirectUri = NODE_ENV === 'production' 
+        ? 'https://chatbot.aipencil.name.vn/oauth/zalo/user/qr-callback'
+        : 'http://localhost:3000/oauth/zalo/user/qr-callback';
+
+    try {
+        // Lấy access token
+        const tokenResponse = await axios.post('https://oauth.zaloapp.com/v4/access_token', 
+            new URLSearchParams({ 
+                code, 
+                app_id: process.env.ZALO_APP_ID || "4316046001988065095", 
+                grant_type: 'authorization_code',
+                redirect_uri: personalRedirectUri
+            }), 
+            { headers: { 'secret_key': process.env.ZALO_APP_SECRET || "t5Lkumo5g1QrFGdGBL8O" } }
+        );
+        const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+        // Lấy thông tin người dùng
+        const profileResponse = await axios.get('https://graph.zalo.me/v2.0/me', { 
+            params: { fields: 'id,name,picture' }, 
+            headers: { 'access_token': access_token } 
+        });
+        const { id: zalo_user_id, name: display_name, picture } = profileResponse.data;
+        const avatar = picture.data.url;
+
+        // Lưu vào database
+        const expiresAt = new Date(Date.now() + (expires_in - 300) * 1000);
+
+        await db.query(`
+            INSERT INTO zalo_personal_users (zalo_user_id, display_name, avatar) VALUES ($1, $2, $3)
+            ON CONFLICT (zalo_user_id) DO UPDATE SET display_name = EXCLUDED.display_name, avatar = EXCLUDED.avatar;
+        `, [zalo_user_id, display_name, avatar]);
+
+        await db.query(`
+            INSERT INTO zalo_personal_tokens (zalo_user_id, access_token, refresh_token, expires_at, scopes) VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (zalo_user_id) DO UPDATE SET access_token = EXCLUDED.access_token, refresh_token = EXCLUDED.refresh_token, expires_at = EXCLUDED.expires_at, scopes = EXCLUDED.scopes;
+        `, [zalo_user_id, access_token, refresh_token, expiresAt, ['profile']]);
+        
+        console.log(`✅ QR Authentication: Đã lưu thông tin cho user ${display_name}`);
+
+        // Cập nhật QR auth store
+        authData.authenticated = true;
+        authData.userInfo = {
+            zalo_user_id,
+            display_name,
+            avatar
+        };
+
+        // Tạo một session tạm thời cho user này (sẽ được sử dụng khi redirect về dashboard)
+        // Lưu thông tin vào một store tạm thời với state làm key
+        authData.sessionData = {
+            connectedAccounts: {
+                oas: {},
+                personal: {
+                    [zalo_user_id]: {
+                        name: display_name,
+                        avatar: avatar,
+                        type: 'personal'
+                    }
+                }
+            }
+        };
+
+        // Hiển thị trang thành công với auto-redirect về QR page
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Xác thực thành công</title>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                    .success { color: #28a745; }
+                    .container { max-width: 400px; margin: 0 auto; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2 class="success">✅ Xác thực thành công!</h2>
+                    <p>Bạn có thể đóng cửa sổ này và quay lại trang QR.</p>
+                    <p>Hệ thống sẽ tự động chuyển hướng...</p>
+                </div>
+                <script>
+                    // Đóng popup sau 3 giây (nếu là popup)
+                    setTimeout(() => {
+                        if (window.opener) {
+                            window.close();
+                        } else {
+                            window.location.href = '/qr-personal.html';
+                        }
+                    }, 3000);
+                </script>
+            </body>
+            </html>
+        `);
+
+    } catch (error) {
+        console.error("Lỗi QR callback:", error.response?.data || error.message);
+        qrAuthStore.delete(state);
+        res.status(500).send("Có lỗi xảy ra trong quá trình xác thực QR");
+    }
+});
+
+// API để hoàn tất đăng nhập từ QR
+app.post('/api/complete-qr-login', (req, res) => {
+    const { state } = req.body;
+    
+    if (!state) {
+        return res.status(400).json({ success: false, message: 'State is required' });
+    }
+
+    const authData = qrAuthStore.get(state);
+    
+    if (!authData || !authData.authenticated) {
+        return res.status(400).json({ success: false, message: 'Invalid or incomplete authentication' });
+    }
+
+    // Chuyển sessionData vào session thật
+    if (authData.sessionData) {
+        req.session.connectedAccounts = authData.sessionData.connectedAccounts;
+    }
+
+    // Cleanup
+    qrAuthStore.delete(state);
+
+    res.json({ success: true, message: 'Login completed' });
 });
 
 // Khởi động server
