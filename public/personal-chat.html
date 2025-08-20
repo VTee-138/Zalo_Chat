@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zalo Personal Chat</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Sidebar với danh sách conversations -->
+        <div class="chat-sidebar">
+            <div class="sidebar-header">
+                <div class="header-info">
+                    <h2>💬 Personal Chat</h2>
+                    <div class="user-info" id="current-user-info">
+                        <div class="loading">Đang tải thông tin...</div>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <a href="/dashboard" class="back-btn" title="Về Dashboard">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20v-2z"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="conversations-section">
+                <div class="section-header">
+                    <h3>📋 Cuộc hội thoại</h3>
+                    <button class="refresh-btn" onclick="loadConversations()" title="Làm mới">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-8 3.58-8 8s3.58 8 8 8c3.74 0 6.9-2.55 7.75-6h-2.03c-.74 2.33-2.87 4-5.72 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="conversations" id="conversations-list">
+                    <div class="loading-conversations">
+                        <div class="spinner"></div>
+                        <p>Đang tải cuộc hội thoại...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main chat area -->
+        <div class="chat-main">
+            <div class="chat-header" id="chat-header">
+                <div class="chat-placeholder">
+                    <div class="placeholder-icon">💬</div>
+                    <h3>Chọn một cuộc hội thoại để bắt đầu chat</h3>
+                    <p>Danh sách cuộc hội thoại sẽ hiển thị bên trái</p>
+                </div>
+            </div>
+
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages sẽ được load dynamically -->
+            </div>
+
+            <div class="chat-input-container" id="chat-form" style="display: none;">
+                <form class="chat-form">
+                    <div class="input-group">
+                        <input type="text" id="message-input" placeholder="Nhập tin nhắn..." autocomplete="off" disabled>
+                        <button type="submit" id="send-btn" disabled>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Customer info panel -->
+        <div class="chat-info-panel">
+            <div class="info-header">
+                <h3>👤 Thông tin</h3>
+            </div>
+            <div class="customer-info" id="customer-info">
+                <div class="no-selection">
+                    <p>Chọn một cuộc hội thoại để xem thông tin chi tiết</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification container -->
+    <div id="notification-container"></div>
+
+    <script src="/personal-chat.js"></script>
+</body>
+</html>

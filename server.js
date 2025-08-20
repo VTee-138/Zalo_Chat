@@ -472,6 +472,12 @@ app.get('/chat/:oaId', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'chat.html'));
 });
 
+// Route cho personal chat
+app.get('/chat/personal/:userId', (req, res) => {
+    // TODO: Kiểm tra xem người dùng có quyền truy cập userId này không
+    res.sendFile(path.join(__dirname, 'public', 'personal-chat.html'));
+});
+
 app.get('/profile/:userId', (req, res) => {
     // Serve profile page for personal accounts
     res.sendFile(path.join(__dirname, 'public', 'profile.html'));
